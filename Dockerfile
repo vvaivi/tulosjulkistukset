@@ -1,7 +1,7 @@
 FROM python:3.12-slim AS production
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 COPY src ./src
 COPY dbt ./dbt
 RUN pip install --no-cache-dir .
