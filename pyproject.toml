@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "helsinki-earnings-notifier"
 version = "0.1.0"
 description = "Free, local ELT pipeline for Nasdaq Helsinki financial-report reminders"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "beautifulsoup4>=4.12,<5",
@@ -39,4 +38,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-
