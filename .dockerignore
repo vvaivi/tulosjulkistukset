@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.venv
+.env
+data
+logs
+target
+dbt_packages
+__pycache__
+.pytest_cache
+.ruff_cache
+*.pyc

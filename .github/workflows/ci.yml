@@ -1,0 +1,15 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build test image
+        run: docker build --target test -t helsinki-earnings-notifier:test .
+      - name: Run tests and lint
+        run: docker run --rm helsinki-earnings-notifier:test

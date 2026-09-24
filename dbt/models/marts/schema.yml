@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: upcoming_earnings
+    description: "Deduplicated upcoming Nasdaq Helsinki financial report dates."
+    columns:
+      - name: event_id
+        tests: [not_null, unique]
+      - name: company
+        tests: [not_null]
+      - name: event_date
+        tests: [not_null]
+      - name: event_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [full_year, half_year, interim, business_review]
+      - name: source_url
+        tests: [not_null]
+

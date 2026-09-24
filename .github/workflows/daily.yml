@@ -1,0 +1,51 @@
+name: Daily earnings reminder
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the email without sending
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --target production -t helsinki-earnings-notifier .
+      - name: Restore DuckDB notification state
+        uses: actions/cache@v4
+        with:
+          path: data/earnings.duckdb
+          key: earnings-db-${{ github.run_id }}
+          restore-keys: earnings-db-
+      - name: Run pipeline
+        env:
+          NOTIFIER_RECIPIENTS: ${{ secrets.NOTIFIER_RECIPIENTS }}
+          NOTIFIER_SENDER: ${{ secrets.NOTIFIER_SENDER }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_USE_SSL: ${{ secrets.SMTP_USE_SSL }}
+        run: |
+          mkdir -p data
+          args=(run)
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then args+=(--dry-run); fi
+          docker run --rm \
+            --volume "$PWD/data:/app/data" \
+            --env NOTIFIER_RECIPIENTS \
+            --env NOTIFIER_SENDER \
+            --env SMTP_HOST \
+            --env SMTP_PORT \
+            --env SMTP_USERNAME \
+            --env SMTP_PASSWORD \
+            --env SMTP_USE_SSL \
+            helsinki-earnings-notifier "${args[@]}"

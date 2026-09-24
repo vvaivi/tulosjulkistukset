@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: disclosures
+        columns:
+          - name: disclosure_id
+            tests: [not_null, unique]
+          - name: source_url
+            tests: [not_null]
+      - name: earnings_events
+        columns:
+          - name: event_id
+            tests: [not_null, unique]
+          - name: event_date
+            tests: [not_null]
+

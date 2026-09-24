@@ -1,0 +1,13 @@
+services:
+  notifier:
+    build:
+      context: .
+      target: production
+    image: helsinki-earnings-notifier:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_PATH: /app/data/earnings.duckdb
+    volumes:
+      - ./data:/app/data
