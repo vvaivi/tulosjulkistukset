@@ -38,10 +38,17 @@ EXCLUDED_TERMS = (
     "vuosikertomus",
     "årsredovisning",
     "annual general meeting",
+    "agm",
+    "extraordinary general meeting",
     "yhtiökokous",
     "bolagsstämma",
     "silent period",
     "closed period",
+)
+WEEKDAY_PATTERN = (
+    r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|"
+    r"maanantaina|tiistaina|keskiviikkona|torstaina|perjantaina|lauantaina|sunnuntaina|"
+    r"måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)"
 )
 DATE_RE = re.compile(
     r"(?:\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|"
@@ -200,10 +207,19 @@ def _candidate_lines(body: Any) -> Iterable[str]:
         element for element in body.select("div") if not element.select_one("li, p, tr, div")
     )
     for element in elements:
-        text = unescape(" ".join(element.get_text(" ", strip=True).split()))
-        if text and len(text) <= 1500 and text not in seen:
-            seen.add(text)
-            yield text
+        # A row is one event even when its cells contain paragraphs. Other
+        # containers must not merge several separately dated calendar entries.
+        if element.name != "tr" and (
+            element.find_parent("tr") or element.select_one("li, p, tr")
+        ):
+            continue
+        for br in element.select("br"):
+            br.replace_with("\0")
+        for line in element.get_text(" ", strip=True).split("\0"):
+            text = unescape(" ".join(line.split()))
+            if text and len(text) <= 1500 and text not in seen:
+                seen.add(text)
+                yield text
 
 
 def classify_event(text: str) -> str:
@@ -232,7 +248,7 @@ def _select_publication_date(line: str) -> str | None:
         value = 4 if after.lstrip().startswith(":") else 0
         if re.search(r"(?:publish(?:ed)?|publication|release|reporting)\s+(?:on\s+)?$", before):
             value += 4
-        elif re.search(r"\bon\s+$", before):
+        elif re.search(rf"\bon\s+(?:{WEEKDAY_PATTERN}\s+)?$", before, re.IGNORECASE):
             value += 2
         if re.search(
             r"(?:period ending|period ended|previously|formerly|from)\s+(?:on\s+)?$", before
