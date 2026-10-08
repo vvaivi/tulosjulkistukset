@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
@@ -23,10 +24,17 @@ def fetch(settings: Settings) -> tuple[int, int]:
         )
         disclosure_count = upsert_disclosures(connection, disclosures)
         for disclosure in disclosures:
+            parsed_events = client.fetch_events(disclosure)
+            if not parsed_events:
+                logging.warning(
+                    "No earnings events extracted from %s: %s",
+                    disclosure.company,
+                    disclosure.source_url,
+                )
             event_count += replace_events_for_disclosure(
                 connection,
                 disclosure.disclosure_id,
-                client.fetch_events(disclosure),
+                parsed_events,
             )
     finally:
         connection.close()

@@ -18,10 +18,12 @@ REPORT_TERMS = (
     "financial result",
     "financial results",
     "financial statement release",
+    "financial statements release",
     "financial statements bulletin",
     "interim report",
     "half-year report",
     "half-year financial report",
+    "half-year financial review",
     "half year report",
     "half year financial report",
     "business review",
@@ -53,7 +55,9 @@ WEEKDAY_PATTERN = (
 DATE_RE = re.compile(
     r"(?:\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|"
     r"\b\d{4}-\d{1,2}-\d{1,2}\b|"
-    r"\b\d{1,2}\s+[A-Za-zÀ-ÖØ-öø-ÿ]+\s+\d{4}\b)",
+    r"\b\d{1,2}\s+[A-Za-zÀ-ÖØ-öø-ÿ]+\s+\d{4}\b|"
+    r"\b(?:January|February|March|April|May|June|July|August|September|October|"
+    r"November|December)\s+\d{1,2},?\s+\d{4}\b)",
     re.IGNORECASE,
 )
 
@@ -99,6 +103,28 @@ class NasdaqClient:
         max_pages: int = 25,
     ) -> list[Disclosure]:
         disclosures: dict[int, Disclosure] = {}
+        for market, group, category in (
+            ("Main Market, Helsinki", "NordicMainMarkets", "Financial Calendar"),
+            ("First North Finland", "NordicFirstNorth", "Financial calendar"),
+        ):
+            disclosures.update(
+                self._fetch_market_disclosures(
+                    from_date, to_date, page_size, max_pages, market, group, category
+                )
+            )
+        return list(disclosures.values())
+
+    def _fetch_market_disclosures(
+        self,
+        from_date: date,
+        to_date: date,
+        page_size: int,
+        max_pages: int,
+        market: str,
+        group: str,
+        category: str,
+    ) -> dict[int, Disclosure]:
+        disclosures: dict[int, Disclosure] = {}
         for page in range(max_pages):
             params = {
                 "type": "handleResponse",
@@ -108,15 +134,15 @@ class NasdaqClient:
                 "countResults": "true",
                 "freeText": "",
                 "company": "",
-                "market": "Main Market, Helsinki",
-                "cnscategory": "Financial Calendar",
+                "market": market,
+                "cnscategory": category,
                 "fromDate": from_date.isoformat(),
                 "toDate": to_date.isoformat(),
                 "globalGroup": "exchangeNotice",
-                "globalName": "NordicMainMarkets",
+                "globalName": group,
                 "displayLanguage": "en",
                 "language": "en",
-                "timeZone": "EET",
+                "timeZone": "UTC",
                 "dateMask": "yyyy-MM-dd HH:mm:ss",
                 "limit": page_size,
                 "start": page * page_size,
@@ -128,15 +154,23 @@ class NasdaqClient:
                 items = [items]
             for item in items:
                 # Nasdaq's market query occasionally returns other Nordic markets.
-                if "helsinki" not in str(item.get("market", "")).lower():
+                if str(item.get("market", "")).casefold() != market.casefold():
                     continue
                 if str(item.get("cnsCategory", "")).lower() != "financial calendar":
                     continue
                 disclosure = _to_disclosure(item)
+                if not from_date <= disclosure.published_at.date() <= to_date:
+                    continue
                 disclosures[disclosure.disclosure_id] = disclosure
-            if len(items) < page_size:
+            if len(items) < page_size or all(
+                date.fromisoformat(item["published"][:10]) < from_date for item in items
+            ):
                 break
-        return list(disclosures.values())
+        else:
+            raise RuntimeError(
+                f"Nasdaq pagination limit reached for {market}; increase NASDAQ_MAX_PAGES"
+            )
+        return disclosures
 
     def fetch_events(self, disclosure: Disclosure) -> list[EarningsEvent]:
         html = self._get_text(disclosure.source_url)
@@ -213,8 +247,13 @@ def _candidate_lines(body: Any) -> Iterable[str]:
             element.find_parent("tr") or element.select_one("li, p, tr")
         ):
             continue
+        # Line breaks may wrap a single entry's report name and date. A table
+        # row likewise remains one entry, including any financial-period dates.
+        split_lines = element.name != "tr" and len(
+            DATE_RE.findall(element.get_text(" ", strip=True))
+        ) > 1
         for br in element.select("br"):
-            br.replace_with("\0")
+            br.replace_with("\0" if split_lines else " ")
         for line in element.get_text(" ", strip=True).split("\0"):
             text = unescape(" ".join(line.split()))
             if text and len(text) <= 1500 and text not in seen:

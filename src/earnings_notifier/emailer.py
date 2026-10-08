@@ -43,6 +43,7 @@ def send_digest(settings: Settings, target_date: date, dry_run: bool = False) ->
         for recipient in settings.recipients:
             events = pending_events(connection, target_date, recipient)
             if not events:
+                print(f"No pending earnings notifications for {target_date} to {recipient}")
                 continue
             message = build_message(
                 settings.notifier_sender or settings.smtp_username, recipient, events
@@ -67,10 +68,10 @@ def send_digest(settings: Settings, target_date: date, dry_run: bool = False) ->
 def build_message(sender: str, recipient: str, events: list[dict[str, str]]) -> EmailMessage:
     event_date = events[0]["event_date"]
     message = EmailMessage()
-    message["Subject"] = f"Huomisen tulosjulkistukset ({event_date}): {len(events)} kpl"
+    message["Subject"] = f"Tulosjulkistukset ({event_date}): {len(events)} kpl"
     message["From"] = sender
     message["To"] = recipient
-    lines = [f"Huomenna {event_date} julkaistavat tulokset:", ""]
+    lines = [f"{event_date} julkaistavat tulokset:", ""]
     items = []
     for event in events:
         lines.extend([f"- {event['company']} ({event['event_type']})", f"  {event['source_url']}"])
@@ -81,7 +82,7 @@ def build_message(sender: str, recipient: str, events: list[dict[str, str]]) -> 
         )
     message.set_content("\n".join(lines))
     message.add_alternative(
-        f"<p>Huomenna {escape(event_date)} julkaistavat tulokset:</p><ul>"
+        f"<p>{escape(event_date)} julkaistavat tulokset:</p><ul>"
         + "".join(items)
         + "</ul>",
         subtype="html",

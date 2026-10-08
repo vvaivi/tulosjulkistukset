@@ -20,5 +20,4 @@ select
 from events
 inner join disclosures using (disclosure_id)
 where events.event_date between current_date - interval 30 day and current_date + interval 550 day
-  and lower(disclosures.market) like '%helsinki%'
-
+  and lower(disclosures.market) in ('main market, helsinki', 'first north finland')
