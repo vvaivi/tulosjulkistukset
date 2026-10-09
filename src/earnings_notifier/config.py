@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     nasdaq_lookahead_days: int = Field(550, ge=30, le=1500)
     nasdaq_page_size: int = Field(100, ge=1, le=200)
     nasdaq_max_pages: int = Field(25, ge=1, le=100)
+    price_symbols: dict[str, str] = Field(default_factory=dict)
 
     notifier_recipients: str = ""
     notifier_sender: str = ""
