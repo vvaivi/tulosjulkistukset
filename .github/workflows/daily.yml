@@ -2,7 +2,8 @@ name: Daily earnings reminder
 
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "1 0 * * *"
+      timezone: "Europe/Helsinki"
   workflow_dispatch:
     inputs:
       dry_run:
