@@ -63,10 +63,12 @@ def calculate_report(
             return PriceChange(label, None, end, None)
         return PriceChange(label, start, end, (prices[end] / prices[start] - 1) * 100)
 
-    changes = [change("Julkistuspäivä", before, release_date)]
-    for label, months in (("1 v", 12), ("6 kk", 6), ("3 kk", 3), ("1 kk", 1)):
+    changes = [
+        change("Julkistuspäivä", before, release_date),
+        change("1 vk", before - timedelta(days=7), before),
+    ]
+    for label, months in (("1 kk", 1), ("3 kk", 3), ("6 kk", 6), ("1 v", 12)):
         changes.append(change(label, _months_before(before, months), before))
-    changes.append(change("1 vk", before - timedelta(days=7), before))
     return PriceReport(symbol, currency, prices[release_date], tuple(changes))
 
 

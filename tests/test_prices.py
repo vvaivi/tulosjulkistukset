@@ -24,8 +24,8 @@ def test_periods_end_before_release_and_weekends_use_previous_close() -> None:
         date(2026, 10, 8),
     )
     assert report.changes[0].percent == pytest.approx(10)
-    assert report.changes[1].percent == pytest.approx(150)
-    assert report.changes[-1].percent == pytest.approx(100 / 9)
+    assert report.changes[-1].percent == pytest.approx(150)
+    assert report.changes[1].percent == pytest.approx(100 / 9)
     assert all(change.end_date == date(2026, 10, 7) for change in report.changes[1:])
     weekend = calculate_report(
         "TEST.HE",
@@ -38,15 +38,15 @@ def test_periods_end_before_release_and_weekends_use_previous_close() -> None:
         date(2026, 10, 5),
     )
     assert weekend.changes[0].start_date == date(2026, 10, 2)
-    assert weekend.changes[4].percent is None  # No sufficiently recent Sep 2 close.
+    assert weekend.changes[2].percent is None  # No sufficiently recent Sep 2 close.
     weekend_target = calculate_report(
         "TEST.HE",
         "EUR",
         {date(2026, 9, 4): 40, date(2026, 10, 5): 50, date(2026, 10, 6): 55},
         date(2026, 10, 6),
     )
-    assert weekend_target.changes[4].start_date == date(2026, 9, 4)
-    assert weekend_target.changes[4].percent == pytest.approx(25)
+    assert weekend_target.changes[2].start_date == date(2026, 9, 4)
+    assert weekend_target.changes[2].percent == pytest.approx(25)
 
 
 def test_missing_release_price_is_not_replaced_with_previous_day() -> None:
@@ -80,8 +80,8 @@ def test_month_end_and_leap_year() -> None:
         },
         date(2024, 3, 1),
     )
-    assert report.changes[1].start_date == date(2023, 2, 28)
-    assert report.changes[4].start_date == date(2024, 1, 29)
+    assert report.changes[-1].start_date == date(2023, 2, 28)
+    assert report.changes[2].start_date == date(2024, 1, 29)
 
 
 def test_symbol_resolution_requires_exact_helsinki_equity() -> None:
