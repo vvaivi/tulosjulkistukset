@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import Settings
 from .nasdaq import NasdaqClient
-from .storage import connect, replace_events_for_disclosure, upsert_disclosures
+from .storage import connect, replace_events_for_disclosure, replace_listings, upsert_disclosures
 
 
 def fetch(settings: Settings) -> tuple[int, int]:
@@ -16,12 +16,15 @@ def fetch(settings: Settings) -> tuple[int, int]:
     disclosure_count = 0
     event_count = 0
     try:
+        listings = client.fetch_listings()
         disclosures = client.fetch_disclosures(
             today - timedelta(days=settings.nasdaq_lookback_days),
             today + timedelta(days=settings.nasdaq_lookahead_days),
             settings.nasdaq_page_size,
             settings.nasdaq_max_pages,
+            listings=listings,
         )
+        replace_listings(connection, listings)
         disclosure_count = upsert_disclosures(connection, disclosures)
         for disclosure in disclosures:
             parsed_events = client.fetch_events(disclosure)

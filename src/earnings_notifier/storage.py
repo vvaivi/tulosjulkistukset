@@ -3,6 +3,7 @@ from pathlib import Path
 
 import duckdb
 
+from .listings import Listing, company_key
 from .models import Disclosure, EarningsEvent
 
 
@@ -11,6 +12,19 @@ def connect(path: Path) -> duckdb.DuckDBPyConnection:
     connection = duckdb.connect(str(path))
     connection.execute("CREATE SCHEMA IF NOT EXISTS raw")
     connection.execute("CREATE SCHEMA IF NOT EXISTS ops")
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS raw.helsinki_listings (
+            listing_id VARCHAR PRIMARY KEY,
+            company VARCHAR NOT NULL,
+            company_key VARCHAR NOT NULL,
+            symbol VARCHAR NOT NULL,
+            isin VARCHAR NOT NULL,
+            market VARCHAR NOT NULL,
+            fetched_at TIMESTAMPTZ DEFAULT current_timestamp
+        )
+        """
+    )
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS raw.disclosures (
@@ -51,7 +65,35 @@ def connect(path: Path) -> duckdb.DuckDBPyConnection:
         )
         """
     )
+    connection.execute("ALTER TABLE raw.disclosures ADD COLUMN IF NOT EXISTS company_key VARCHAR")
+    for (company,) in connection.execute(
+        "SELECT DISTINCT company FROM raw.disclosures WHERE company_key IS NULL"
+    ).fetchall():
+        connection.execute(
+            "UPDATE raw.disclosures SET company_key = ? WHERE company = ?",
+            [company_key(company), company],
+        )
     return connection
+
+
+def replace_listings(connection: duckdb.DuckDBPyConnection, rows: Iterable[Listing]) -> int:
+    snapshot = list(rows)
+    if not snapshot:
+        raise ValueError("Cannot replace the Helsinki listing snapshot with an empty list")
+    connection.begin()
+    try:
+        connection.execute("DELETE FROM raw.helsinki_listings")
+        connection.executemany(
+            "INSERT INTO raw.helsinki_listings "
+            "(listing_id, company, company_key, symbol, isin, market) VALUES (?, ?, ?, ?, ?, ?)",
+            [(row.listing_id, row.company, row.company_key, row.symbol, row.isin, row.market)
+             for row in snapshot],
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    return len(snapshot)
 
 
 def upsert_disclosures(connection: duckdb.DuckDBPyConnection, rows: Iterable[Disclosure]) -> int:
@@ -61,8 +103,8 @@ def upsert_disclosures(connection: duckdb.DuckDBPyConnection, rows: Iterable[Dis
             """
             INSERT OR REPLACE INTO raw.disclosures
             (disclosure_id, company, headline, market, category, published_at,
-             source_url, language, raw_json, ingested_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, current_timestamp)
+             source_url, language, raw_json, company_key, ingested_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?, current_timestamp)
             """,
             [
                 row.disclosure_id,
@@ -74,6 +116,7 @@ def upsert_disclosures(connection: duckdb.DuckDBPyConnection, rows: Iterable[Dis
                 row.source_url,
                 row.language,
                 row.raw_json,
+                company_key(row.company),
             ],
         )
         count += 1

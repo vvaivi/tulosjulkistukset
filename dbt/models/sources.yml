@@ -4,6 +4,12 @@ sources:
   - name: raw
     schema: raw
     tables:
+      - name: helsinki_listings
+        columns:
+          - name: listing_id
+            tests: [not_null, unique]
+          - name: company_key
+            tests: [not_null]
       - name: disclosures
         columns:
           - name: disclosure_id
@@ -16,4 +22,3 @@ sources:
             tests: [not_null, unique]
           - name: event_date
             tests: [not_null]
-

@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from earnings_notifier.listings import Listing
 from earnings_notifier.models import Disclosure
 from earnings_notifier.nasdaq import NasdaqClient, parse_disclosure_html
 
@@ -96,13 +97,35 @@ def test_admicom_calendar() -> None:
     }
 
 
-def test_fetches_both_finnish_markets_and_excludes_other_markets() -> None:
+@pytest.mark.parametrize("company,disclosure_id,market,fixture,expected", [
+    ("Duell Oyj", 1393803, "First North Finland", "duell.html", {
+        (date(2026, 1, 14), "interim"),
+        (date(2026, 4, 9), "half_year"),
+        (date(2026, 7, 2), "interim"),
+        (date(2026, 10, 15), "full_year"),
+    }),
+    ("Nordea Bank Abp", 1390993, "Main Market, Stockholm", "nordea.html", {
+        (date(2026, 1, 29), "full_year"),
+        (date(2026, 4, 22), "interim"),
+        (date(2026, 7, 16), "half_year"),
+        (date(2026, 10, 15), "interim"),
+    }),
+])
+def test_duell_and_nordea_calendars(company, disclosure_id, market, fixture, expected) -> None:
+    disclosure = Disclosure(
+        disclosure_id, company, "Financial reporting in 2026", market, "Financial Calendar",
+        datetime(2025, 10, 1, tzinfo=UTC), "https://example.test/calendar", "en", "{}",
+    )
+    events = parse_disclosure_html(disclosure, Path("tests/fixtures", fixture).read_text())
+
+    assert {(event.event_date, event.event_type) for event in events} == expected
+
+
+def test_fetches_calendars_by_listing_membership_regardless_of_primary_market() -> None:
     def response(params):
         first_north = params["globalName"] == "NordicFirstNorth"
         assert params["timeZone"] == "UTC"
-        assert params["market"] == (
-            "First North Finland" if first_north else "Main Market, Helsinki"
-        )
+        assert params["market"] == ""
         assert params["cnscategory"] == (
             "Financial calendar" if first_north else "Financial Calendar"
         )
@@ -110,22 +133,33 @@ def test_fetches_both_finnish_markets_and_excludes_other_markets() -> None:
             "disclosureId": 1398228 if first_north else 1,
             "company": "Admicom Oyj" if first_north else "Test Oyj",
             "headline": "Calendar", "published": "2025-11-03 10:56:23",
-            "market": params["market"], "cnsCategory": params["cnscategory"],
+            "market": "First North Finland" if first_north else "Main Market, Helsinki",
+            "cnsCategory": params["cnscategory"],
             "messageUrl": "https://example.test/calendar", "language": "en",
         }
         return {"results": {"item": [
             item,
-            dict(item, disclosureId=2, market="Main Market, Stockholm"),
+            dict(item, disclosureId=2, company="Swedish issuer", market="Main Market, Stockholm"),
             dict(item, disclosureId=3, published="2020-01-01 00:00:00"),
             dict(item, disclosureId=4, cnsCategory="Annual Financial Report"),
+            dict(item, disclosureId=5, company="Nordea Bank Abp", market="Main Market, Stockholm"),
+            dict(item, disclosureId=6, company="Nordea Bank Abp", market="Main Market, Copenhagen"),
         ]}}
 
     client = NasdaqClient()
     try:
         with patch.object(client, "_get_json", side_effect=response) as query:
-            disclosures = client.fetch_disclosures(date(2025, 1, 1), date(2026, 10, 8))
+            disclosures = client.fetch_disclosures(
+                date(2025, 1, 1), date(2026, 10, 8), listings=[
+                    Listing(str(index), company, "TEST", "FI123", "Main Market, Helsinki")
+                    for index, company in enumerate(("Test Oyj", "Admicom Oyj", "Nordea Bank Abp"))
+                ],
+            )
         assert query.call_count == 2
-        assert {item.company for item in disclosures} == {"Admicom Oyj", "Test Oyj"}
+        assert {item.company for item in disclosures} == {
+            "Admicom Oyj", "Test Oyj", "Nordea Bank Abp"
+        }
+        assert {item.disclosure_id for item in disclosures} == {1, 5, 6, 1398228}
         assert all(item.published_at.hour == 10 for item in disclosures)
     finally:
         client.close()
@@ -138,7 +172,10 @@ def test_pagination_limit_is_an_error_instead_of_silent_partial_results() -> Non
             "market": "Main Market, Stockholm", "published": "2026-10-01 00:00:00",
         }]}}):
             with pytest.raises(RuntimeError, match="pagination limit"):
-                client.fetch_disclosures(date(2025, 1, 1), date(2026, 10, 8), 1, 1)
+                client.fetch_disclosures(
+                    date(2025, 1, 1), date(2026, 10, 8), 1, 1,
+                    listings=[Listing("1", "Test", "TEST", "FI123", "Main Market, Helsinki")],
+                )
     finally:
         client.close()
 

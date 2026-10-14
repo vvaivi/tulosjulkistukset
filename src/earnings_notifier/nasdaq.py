@@ -11,10 +11,16 @@ import httpx
 from bs4 import BeautifulSoup
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from .listings import Listing, company_key
 from .models import Disclosure, EarningsEvent
 
 API_URL = "https://api.news.eu.nasdaq.com/news/query.action"
+LISTINGS_URL = "https://api.nasdaq.com/api/nordic/screener/shares"
 REPORT_TERMS = (
+    "financial report",
+    "financial statements report",
+    "full-year results",
+    "half-year results",
     "financial result",
     "financial results",
     "financial statement release",
@@ -67,7 +73,11 @@ class NasdaqClient:
         self.client = httpx.Client(
             timeout=timeout,
             follow_redirects=True,
-            headers={"User-Agent": "helsinki-earnings-notifier/0.1 (+personal data project)"},
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json, text/html, */*",
+                "Origin": "https://www.nasdaq.com",
+            },
         )
 
     def close(self) -> None:
@@ -79,8 +89,8 @@ class NasdaqClient:
         wait=wait_exponential(multiplier=1, min=1, max=8),
         reraise=True,
     )
-    def _get_json(self, params: dict[str, Any]) -> dict[str, Any]:
-        response = self.client.get(API_URL, params=params)
+    def _get_json(self, params: dict[str, Any], *, url: str = API_URL) -> dict[str, Any]:
+        response = self.client.get(url, params=params)
         response.raise_for_status()
         return response.json()
 
@@ -95,13 +105,53 @@ class NasdaqClient:
         response.raise_for_status()
         return response.text
 
+    def fetch_listings(self) -> list[Listing]:
+        listings: dict[str, Listing] = {}
+        for category, market in (
+            ("MAIN_MARKET", "Main Market, Helsinki"),
+            ("FIRST_NORTH", "First North Finland"),
+        ):
+            for page in range(1, 26):
+                params: dict[str, Any] = {
+                    "category": category, "market": "HEL", "tableonly": "true",
+                    "page": page, "size": 1000, "lang": "en",
+                }
+                if category == "MAIN_MARKET":
+                    params["segment"] = ["LARGE_CAP", "MID_CAP", "SMALL_CAP", "SPAC"]
+                payload = self._get_json(params, url=LISTINGS_URL)
+                data = payload.get("data") or {}
+                rows = (data.get("instrumentListing") or {}).get("rows")
+                pagination = data.get("pagination") or {}
+                if not rows or not pagination.get("totalPages"):
+                    raise ValueError(f"Nasdaq returned an incomplete listing response for {market}")
+                for row in rows:
+                    listing = Listing(
+                        str(row["orderbookId"]), str(row.get("issuerFullName") or row["fullName"]),
+                        str(row["symbol"]), str(row["isin"]), market,
+                    )
+                    if not listing.company_key or not listing.listing_id or not listing.isin:
+                        raise ValueError(f"Nasdaq returned an invalid listing for {market}")
+                    listings[listing.listing_id] = listing
+                if page >= int(pagination["totalPages"]):
+                    break
+            else:
+                raise RuntimeError(f"Nasdaq listing pagination limit reached for {market}")
+        return list(listings.values())
+
     def fetch_disclosures(
         self,
         from_date: date,
         to_date: date,
         page_size: int = 100,
         max_pages: int = 25,
+        *,
+        listings: list[Listing] | None = None,
     ) -> list[Disclosure]:
+        if listings is None:
+            listings = self.fetch_listings()
+        listed_companies = {listing.company_key for listing in listings}
+        if not listed_companies:
+            raise ValueError("The Helsinki listing snapshot is empty")
         disclosures: dict[int, Disclosure] = {}
         for market, group, category in (
             ("Main Market, Helsinki", "NordicMainMarkets", "Financial Calendar"),
@@ -109,7 +159,8 @@ class NasdaqClient:
         ):
             disclosures.update(
                 self._fetch_market_disclosures(
-                    from_date, to_date, page_size, max_pages, market, group, category
+                    from_date, to_date, page_size, max_pages, market, group, category,
+                    listed_companies,
                 )
             )
         return list(disclosures.values())
@@ -123,6 +174,7 @@ class NasdaqClient:
         market: str,
         group: str,
         category: str,
+        listed_companies: set[str],
     ) -> dict[int, Disclosure]:
         disclosures: dict[int, Disclosure] = {}
         for page in range(max_pages):
@@ -134,7 +186,7 @@ class NasdaqClient:
                 "countResults": "true",
                 "freeText": "",
                 "company": "",
-                "market": market,
+                "market": "",
                 "cnscategory": category,
                 "fromDate": from_date.isoformat(),
                 "toDate": to_date.isoformat(),
@@ -153,8 +205,8 @@ class NasdaqClient:
             if not isinstance(items, list):
                 items = [items]
             for item in items:
-                # Nasdaq's market query occasionally returns other Nordic markets.
-                if str(item.get("market", "")).casefold() != market.casefold():
+                # Use the actual listing universe, not the disclosure's primary market.
+                if company_key(str(item.get("company", ""))) not in listed_companies:
                     continue
                 if str(item.get("cnsCategory", "")).lower() != "financial calendar":
                     continue
@@ -201,7 +253,10 @@ def parse_disclosure_html(disclosure: Disclosure, html: str) -> list[EarningsEve
 
     for line in candidates:
         lowered = line.casefold()
-        if not any(_contains_term(lowered, term) for term in REPORT_TERMS):
+        if not (
+            any(_contains_term(lowered, term) for term in REPORT_TERMS)
+            or re.search(r"\b(?:first|second|third|fourth)[ -]quarter\b.{0,80}\bresults\b", lowered)
+        ):
             continue
         if any(_contains_term(lowered, term) for term in EXCLUDED_TERMS):
             continue
@@ -265,7 +320,9 @@ def classify_event(text: str) -> str:
     value = text.casefold()
     if any(term in value for term in ("half-year", "half year", "puolivuosi", "halvår")):
         return "half_year"
-    if any(term in value for term in ("financial result", "statement", "tilinpäätös", "bokslut")):
+    if any(term in value for term in (
+        "financial result", "statement", "tilinpäätös", "bokslut", "full-year", "full year"
+    )):
         return "full_year"
     if "business review" in value or "liiketoimintakatsaus" in value:
         return "business_review"
