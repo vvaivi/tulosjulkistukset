@@ -1,0 +1,50 @@
+{
+  "data": {
+    "instrumentListing": {
+      "headers": {
+        "fullName": "Name",
+        "currency": "CCY",
+        "lastSalePrice": "Last",
+        "netChange": "Net Change",
+        "percentageChange": "% Change",
+        "bidPrice": "Bid",
+        "askPrice": "Ask",
+        "volume": "Volume",
+        "turnover": "Turnover",
+        "greenEquityDesignation": "Green Equity Designation",
+        "sector": "Sector"
+      },
+      "rows": [
+        {
+          "fullName": "Admicom Oyj",
+          "issuerFullName": "",
+          "orderbookId": "TX2601634",
+          "symbol": "ADMCM",
+          "isin": "FI4000251830"
+        },
+        {
+          "fullName": "Duell Oyj",
+          "issuerFullName": "",
+          "orderbookId": "TX4044032",
+          "symbol": "DUELL",
+          "isin": "FI4000582143"
+        }
+      ]
+    },
+    "pagination": {
+      "paginationId": "",
+      "total": 2,
+      "size": 1000,
+      "page": 1,
+      "totalPages": 1
+    },
+    "filters": null
+  },
+  "messages": null,
+  "status": {
+    "timestamp": "2026-10-14T12:10:39+0200",
+    "rCode": 200,
+    "bCodeMessage": null,
+    "developerMessage": ""
+  }
+}

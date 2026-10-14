@@ -1,0 +1,85 @@
+{
+  "data": {
+    "instrumentListing": {
+      "headers": {
+        "fullName": "Name",
+        "currency": "CCY",
+        "lastSalePrice": "Last",
+        "netChange": "Net Change",
+        "percentageChange": "% Change",
+        "bidPrice": "Bid",
+        "askPrice": "Ask",
+        "volume": "Volume",
+        "turnover": "Turnover",
+        "greenEquityDesignation": "Green Equity Designation",
+        "sector": "Sector"
+      },
+      "rows": [
+        {
+          "fullName": "Alisa Pankki Oyj",
+          "issuerFullName": "",
+          "orderbookId": "TX1933106",
+          "symbol": "ALISA",
+          "isin": "FI4000170915"
+        },
+        {
+          "fullName": "Elisa Oyj",
+          "issuerFullName": "",
+          "orderbookId": "TX50014",
+          "symbol": "ELISA",
+          "isin": "FI0009007884"
+        },
+        {
+          "fullName": "Nokian Renkaat Oyj",
+          "issuerFullName": "",
+          "orderbookId": "TX50064",
+          "symbol": "TYRES",
+          "isin": "FI0009005318"
+        },
+        {
+          "fullName": "Nordea Bank Abp",
+          "issuerFullName": "",
+          "orderbookId": "TX50060",
+          "symbol": "NDA FI",
+          "isin": "FI4000297767"
+        },
+        {
+          "fullName": "SSAB A",
+          "issuerFullName": "",
+          "orderbookId": "TX1601776",
+          "symbol": "SSABAH",
+          "isin": "SE0000171100"
+        },
+        {
+          "fullName": "SSAB B",
+          "issuerFullName": "",
+          "orderbookId": "TX1601778",
+          "symbol": "SSABBH",
+          "isin": "SE0000120669"
+        },
+        {
+          "fullName": "Telia Company",
+          "issuerFullName": "",
+          "orderbookId": "TX50126",
+          "symbol": "TELIA1",
+          "isin": "SE0000667925"
+        }
+      ]
+    },
+    "pagination": {
+      "paginationId": "",
+      "total": 7,
+      "size": 1000,
+      "page": 1,
+      "totalPages": 1
+    },
+    "filters": null
+  },
+  "messages": null,
+  "status": {
+    "timestamp": "2026-10-14T12:10:38+0200",
+    "rCode": 200,
+    "bCodeMessage": null,
+    "developerMessage": ""
+  }
+}
